@@ -1,3 +1,4 @@
+import React from "react";
 import StillLifeDashboard from "./StillLifeDashboard";
 
 export default function App() {
