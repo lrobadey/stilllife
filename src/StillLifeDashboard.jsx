@@ -433,8 +433,6 @@ export default function StillLifeDashboard() {
 
   return (
     <div style={styles.root}>
-      <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&display=swap" rel="stylesheet" />
-
       {/* HEADER */}
       <div style={styles.header}>
         <p style={styles.eyebrow}>CHAMBER ORCHESTRA · FORM PLANNING</p>
