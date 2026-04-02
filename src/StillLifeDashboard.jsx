@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useRef } from "react";
 
 const HAIKU_DATA = {
   stasis: {
@@ -179,6 +179,9 @@ export default function StillLifeDashboard() {
   const [formNote, setFormNote] = useState("");
   const [showNotes, setShowNotes] = useState(true);
   const [view, setView] = useState("columns"); // "columns" | "form"
+  const [sectionOrder, setSectionOrder] = useState(["stasis", "emergence", "energy"]);
+  const dragSrcKey = useRef(null);
+  const dragOverKey = useRef(null);
 
   const toggleHaiku = useCallback((id) => {
     setHaikuStates((prev) => ({
@@ -201,6 +204,38 @@ export default function StillLifeDashboard() {
 
   const resetAll = () => setHaikuStates({});
 
+  const handleDragStart = (e, sKey) => {
+    dragSrcKey.current = sKey;
+    // rAF defers opacity so drag ghost captures full-opacity snapshot first
+    requestAnimationFrame(() => { e.target.style.opacity = "0.35"; });
+  };
+
+  const handleDragEnd = (e) => {
+    e.target.style.opacity = "";
+    dragSrcKey.current = null;
+    dragOverKey.current = null;
+  };
+
+  const handleDragOver = (e, sKey) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    dragOverKey.current = sKey;
+  };
+
+  const handleDrop = (e, sKey) => {
+    e.preventDefault();
+    const src = dragSrcKey.current;
+    if (!src || src === sKey) return;
+    setSectionOrder((prev) => {
+      const next = [...prev];
+      const srcIdx = next.indexOf(src);
+      const dstIdx = next.indexOf(sKey);
+      next.splice(srcIdx, 1);
+      next.splice(dstIdx, 0, src);
+      return next;
+    });
+  };
+
   const styles = {
     root: {
       minHeight: "100vh",
@@ -210,9 +245,7 @@ export default function StillLifeDashboard() {
       padding: "0 0 60px",
     },
     header: {
-      padding: "36px 40px 0",
-      borderBottom: "1px solid rgba(255,255,255,0.07)",
-      paddingBottom: 24,
+      // spacing owned by .sl-header CSS class
     },
     eyebrow: {
       fontSize: 10,
@@ -279,7 +312,7 @@ export default function StillLifeDashboard() {
       opacity: totalSelected === 0 ? 0.3 : 1,
     },
     formPanel: {
-      margin: "28px 40px",
+      marginTop: 28,
       padding: "24px 28px",
       background: "rgba(255,255,255,0.02)",
       border: "1px solid rgba(255,255,255,0.07)",
@@ -310,11 +343,7 @@ export default function StillLifeDashboard() {
       whiteSpace: "nowrap",
     }),
     columnsGrid: {
-      display: "grid",
-      gridTemplateColumns: "1fr 1fr 1fr",
-      gap: 20,
-      padding: "0 40px",
-      marginTop: 4,
+      // layout owned by .sl-columns-grid CSS class
     },
     column: (accent, accentDim) => ({
       position: "relative",
@@ -372,11 +401,7 @@ export default function StillLifeDashboard() {
       lineHeight: 1.6,
     }),
     formViewGrid: {
-      display: "grid",
-      gridTemplateColumns: "1fr 1fr 1fr",
-      gap: 20,
-      padding: "0 40px",
-      marginTop: 4,
+      // layout owned by .sl-form-grid CSS class
     },
     formSection: (accent, accentDim) => ({
       padding: "20px",
@@ -415,13 +440,21 @@ export default function StillLifeDashboard() {
       textAlign: "center",
       padding: "20px 0",
     }),
+    dragHandle: {
+      display: "inline-block",
+      fontFamily: "monospace",
+      fontSize: 13,
+      color: "#4a4540",
+      cursor: "grab",
+      userSelect: "none",
+      marginRight: 10,
+      verticalAlign: "middle",
+    },
     globalNotesArea: {
-      margin: "0 40px",
       padding: "20px 24px",
       background: "rgba(255,255,255,0.015)",
       border: "1px solid rgba(255,255,255,0.05)",
       borderRadius: 4,
-      marginTop: 20,
     },
   };
 
@@ -434,7 +467,7 @@ export default function StillLifeDashboard() {
   return (
     <div style={styles.root}>
       {/* HEADER */}
-      <div style={styles.header}>
+      <div className="sl-header" style={styles.header}>
         <p style={styles.eyebrow}>CHAMBER ORCHESTRA · FORM PLANNING</p>
         <h1 style={styles.title}>
           <span style={styles.titleItalic}>Still Life</span>
@@ -453,7 +486,7 @@ export default function StillLifeDashboard() {
       </div>
 
       {/* ARC PANEL */}
-      <div style={styles.formPanel}>
+      <div className="sl-panel" style={styles.formPanel}>
         <p style={styles.arcLabel}>ENERGY ARC — SELECTED HAIKU PER SECTION</p>
         <ArcSVG stateCounts={stateCounts} />
         {totalSelected > 0 && (
@@ -477,7 +510,7 @@ export default function StillLifeDashboard() {
       {/* COLUMNS VIEW */}
       {view === "columns" && (
         <>
-          <div style={styles.columnsGrid}>
+          <div className="sl-columns-grid" style={styles.columnsGrid}>
             {SECTIONS.map((sKey) => {
               const sec = HAIKU_DATA[sKey];
               return (
@@ -519,13 +552,22 @@ export default function StillLifeDashboard() {
       {/* FORM VIEW */}
       {view === "form" && (
         <>
-          <div style={styles.formViewGrid}>
-            {SECTIONS.map((sKey) => {
+          <div className="sl-form-grid" style={styles.formViewGrid}>
+            {sectionOrder.map((sKey) => {
               const sec = HAIKU_DATA[sKey];
               const selected = selectedBySection[sKey];
               return (
-                <div key={sKey} style={styles.formSection(sec.accent, sec.accentDim)}>
+                <div
+                  key={sKey}
+                  style={styles.formSection(sec.accent, sec.accentDim)}
+                  draggable
+                  onDragStart={(e) => handleDragStart(e, sKey)}
+                  onDragEnd={handleDragEnd}
+                  onDragOver={(e) => handleDragOver(e, sKey)}
+                  onDrop={(e) => handleDrop(e, sKey)}
+                >
                   <p style={styles.formSectionLabel(sec.accent)}>
+                    <span style={styles.dragHandle} title="Drag to reorder">⠿</span>
                     {sec.label} &nbsp;·&nbsp; {sec.title.toUpperCase()} &nbsp;·&nbsp; {selected.length} HAIKU
                   </p>
                   {selected.length === 0 ? (
@@ -553,7 +595,7 @@ export default function StillLifeDashboard() {
             })}
           </div>
           {/* Global form note */}
-          <div style={styles.globalNotesArea}>
+          <div className="sl-global-notes" style={styles.globalNotesArea}>
             <p style={{ fontSize: 9, fontFamily: "monospace", letterSpacing: "0.2em", color: "#3a3530", marginBottom: 10 }}>GLOBAL FORM NOTES</p>
             <textarea
               style={{
