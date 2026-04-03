@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 
 const HAIKU_DATA = {
   stasis: {
@@ -58,11 +58,59 @@ const SECTION_ENERGY_Y = {
   emergence: 128,
   energy: 48,
 };
+const STORAGE_KEY = "still-life-form-state-v1";
+const DEFAULT_SECTION_NOTES = { stasis: "", emergence: "", energy: "" };
+const DEFAULT_VIEW = "columns";
+const DEFAULT_SHOW_NOTES = true;
 
 // States cycle: neutral -> selected -> rejected -> neutral
 const STATE_CYCLE = { neutral: "selected", selected: "rejected", rejected: "neutral" };
 
 const getPartLabel = (index) => PART_LABELS[index] || `Part ${index + 1}`;
+
+const isValidSectionOrder = (value) =>
+  Array.isArray(value) &&
+  value.length === SECTION_IDS.length &&
+  SECTION_IDS.every((id) => value.includes(id));
+
+const sanitizeSectionNotes = (value) => {
+  if (!value || typeof value !== "object") {
+    return DEFAULT_SECTION_NOTES;
+  }
+
+  return SECTION_IDS.reduce((notes, sectionId) => {
+    notes[sectionId] = typeof value[sectionId] === "string" ? value[sectionId] : "";
+    return notes;
+  }, {});
+};
+
+const loadPersistedState = () => {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEY);
+
+    if (!raw) {
+      return null;
+    }
+
+    const parsed = JSON.parse(raw);
+
+    return {
+      haikuStates:
+        parsed.haikuStates && typeof parsed.haikuStates === "object" ? parsed.haikuStates : {},
+      sectionOrder: isValidSectionOrder(parsed.sectionOrder) ? parsed.sectionOrder : SECTION_IDS,
+      sectionNotes: sanitizeSectionNotes(parsed.sectionNotes),
+      formNote: typeof parsed.formNote === "string" ? parsed.formNote : "",
+      showNotes: typeof parsed.showNotes === "boolean" ? parsed.showNotes : DEFAULT_SHOW_NOTES,
+      view: parsed.view === "form" ? "form" : DEFAULT_VIEW,
+    };
+  } catch {
+    return null;
+  }
+};
 
 const buildArcPath = (points) =>
   points.reduce((path, point, index, arr) => {
@@ -236,14 +284,29 @@ const HaikuCard = ({ haiku, sectionAccent, accentDim, status, onToggle, showNote
 };
 
 export default function StillLifeDashboard() {
-  const [haikuStates, setHaikuStates] = useState({});
-  const [sectionOrder, setSectionOrder] = useState(SECTION_IDS);
+  const [persistedState] = useState(() => loadPersistedState());
+  const [haikuStates, setHaikuStates] = useState(persistedState?.haikuStates ?? {});
+  const [sectionOrder, setSectionOrder] = useState(persistedState?.sectionOrder ?? SECTION_IDS);
   const [draggedSectionId, setDraggedSectionId] = useState(null);
   const [dropTargetId, setDropTargetId] = useState(null);
-  const [sectionNotes, setSectionNotes] = useState({ stasis: "", emergence: "", energy: "" });
-  const [formNote, setFormNote] = useState("");
-  const [showNotes, setShowNotes] = useState(true);
-  const [view, setView] = useState("columns");
+  const [sectionNotes, setSectionNotes] = useState(persistedState?.sectionNotes ?? DEFAULT_SECTION_NOTES);
+  const [formNote, setFormNote] = useState(persistedState?.formNote ?? "");
+  const [showNotes, setShowNotes] = useState(persistedState?.showNotes ?? DEFAULT_SHOW_NOTES);
+  const [view, setView] = useState(persistedState?.view ?? DEFAULT_VIEW);
+
+  useEffect(() => {
+    window.localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        haikuStates,
+        sectionOrder,
+        sectionNotes,
+        formNote,
+        showNotes,
+        view,
+      }),
+    );
+  }, [formNote, haikuStates, sectionNotes, sectionOrder, showNotes, view]);
 
   const toggleHaiku = useCallback((id) => {
     setHaikuStates((prev) => ({
