@@ -595,6 +595,49 @@ export default function StillLifeDashboard() {
       textAlign: "center",
       padding: "20px 0",
     }),
+    partNotesGrid: {
+      display: "grid",
+      gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+      gap: 20,
+      padding: "0 40px",
+      marginTop: 20,
+    },
+    partNotesPanel: (accent, accentDim) => ({
+      padding: "18px 20px",
+      background: accentDim,
+      border: `1px solid ${accent}30`,
+      borderRadius: 4,
+      minWidth: 0,
+    }),
+    partNotesLabel: (accent) => ({
+      fontSize: 9,
+      letterSpacing: "0.22em",
+      fontFamily: "monospace",
+      color: accent,
+      margin: "0 0 6px",
+    }),
+    partNotesTitle: {
+      fontSize: 15,
+      color: "#d6cfbf",
+      margin: "0 0 12px",
+      letterSpacing: "0.03em",
+    },
+    formNotesInput: {
+      width: "100%",
+      background: "rgba(0,0,0,0.18)",
+      border: "1px solid rgba(255,255,255,0.06)",
+      borderRadius: 3,
+      padding: "10px 12px",
+      color: "#8a8278",
+      fontSize: 12.5,
+      fontFamily: "'Cormorant Garamond', Georgia, serif",
+      fontStyle: "italic",
+      resize: "vertical",
+      minHeight: 82,
+      outline: "none",
+      boxSizing: "border-box",
+      lineHeight: 1.65,
+    },
     globalNotesArea: {
       margin: "0 40px",
       padding: "20px 24px",
@@ -744,17 +787,25 @@ export default function StillLifeDashboard() {
                       </div>
                     ))
                   )}
-                  {sectionNotes[section.id] && (
-                    <div style={{ marginTop: 14, padding: "10px 12px", background: "rgba(0,0,0,0.2)", borderRadius: 3 }}>
-                      <p style={{ fontSize: 9, fontFamily: "monospace", letterSpacing: "0.1em", color: section.accent, opacity: 0.5, marginBottom: 4 }}>NOTES</p>
-                      <p style={{ fontSize: 12.5, fontStyle: "italic", color: "#7a7268", fontFamily: "'Cormorant Garamond', Georgia, serif", margin: 0, lineHeight: 1.6 }}>
-                        {sectionNotes[section.id]}
-                      </p>
-                    </div>
-                  )}
                 </div>
               );
             })}
+          </div>
+          <div style={styles.partNotesGrid}>
+            {orderedSections.map((section) => (
+              <div key={`${section.id}-notes`} style={styles.partNotesPanel(section.accent, section.accentDim)}>
+                <p style={styles.partNotesLabel(section.accent)}>
+                  {section.partLabel} &nbsp;·&nbsp; {section.title.toUpperCase()}
+                </p>
+                <p style={styles.partNotesTitle}>Part notes / annotation</p>
+                <textarea
+                  style={styles.formNotesInput}
+                  placeholder={`Compositional notes for ${section.partLabel.toLowerCase()} · ${section.title.toLowerCase()}…`}
+                  value={sectionNotes[section.id]}
+                  onChange={(e) => setSectionNotes((prev) => ({ ...prev, [section.id]: e.target.value }))}
+                />
+              </div>
+            ))}
           </div>
           <div style={styles.globalNotesArea}>
             <p style={{ fontSize: 9, fontFamily: "monospace", letterSpacing: "0.2em", color: "#3a3530", marginBottom: 10 }}>GLOBAL FORM NOTES</p>
