@@ -1,9 +1,8 @@
-import React, { useState, useCallback } from "react";
+import React, { useCallback, useState } from "react";
 
 const HAIKU_DATA = {
   stasis: {
     id: "stasis",
-    label: "Part I",
     title: "Stasis",
     subtitle: "Vast time, arrested motion, deep quiet",
     sonic: "Long tones · Drone fields · Sparse texture · Minimal pulse",
@@ -20,7 +19,6 @@ const HAIKU_DATA = {
   },
   emergence: {
     id: "emergence",
-    label: "Part II",
     title: "Emergence",
     subtitle: "Buried pulse, interior states, life welling up",
     sonic: "Textural thickening · Interior harmony · Slow rhythmic emergence",
@@ -37,7 +35,6 @@ const HAIKU_DATA = {
   },
   energy: {
     id: "energy",
-    label: "Part III",
     title: "Energy",
     subtitle: "Sudden events, kinetic imagery, rupture",
     sonic: "Rhythmic density · Timbral saturation · Momentum · Event-driven form",
@@ -54,48 +51,110 @@ const HAIKU_DATA = {
   },
 };
 
-const SECTIONS = ["stasis", "emergence", "energy"];
+const SECTION_IDS = ["stasis", "emergence", "energy"];
+const PART_LABELS = ["Part I", "Part II", "Part III"];
+const SECTION_ENERGY_Y = {
+  stasis: 214,
+  emergence: 128,
+  energy: 48,
+};
 
-// States cycle: neutral → selected → rejected → neutral
+// States cycle: neutral -> selected -> rejected -> neutral
 const STATE_CYCLE = { neutral: "selected", selected: "rejected", rejected: "neutral" };
 
-const ArcSVG = ({ stateCounts }) => {
-  const pts = [
-    { x: 60, y: 160 },
-    { x: 220, y: 80 },
-    { x: 380, y: 20 },
-  ];
-  const path = `M ${pts[0].x} ${pts[0].y} C 140,140 300,50 ${pts[2].x} ${pts[2].y}`;
-  const sections = Object.values(HAIKU_DATA);
+const getPartLabel = (index) => PART_LABELS[index] || `Part ${index + 1}`;
+
+const buildArcPath = (points) =>
+  points.reduce((path, point, index, arr) => {
+    if (index === 0) {
+      return `M ${point.x} ${point.y}`;
+    }
+
+    const prev = arr[index - 1];
+    const prevPrev = arr[index - 2] || prev;
+    const next = arr[index + 1] || point;
+    const cp1x = prev.x + (point.x - prevPrev.x) / 6;
+    const cp1y = prev.y + (point.y - prevPrev.y) / 6;
+    const cp2x = point.x - (next.x - prev.x) / 6;
+    const cp2y = point.y - (next.y - prev.y) / 6;
+
+    return `${path} C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${point.x} ${point.y}`;
+  }, "");
+
+const ArcSVG = ({ orderedSections, stateCounts }) => {
+  const width = 1200;
+  const height = 280;
+  const left = 96;
+  const right = width - 96;
+  const step = orderedSections.length > 1 ? (right - left) / (orderedSections.length - 1) : 0;
+  const points = orderedSections.map((section, index) => ({
+    x: left + step * index,
+    y: SECTION_ENERGY_Y[section.id] || height / 2,
+    section,
+  }));
+  const path = buildArcPath(points);
+
   return (
-    <svg viewBox="0 0 440 200" style={{ width: "100%", maxWidth: 440, height: 90, display: "block" }}>
+    <svg
+      viewBox={`0 0 ${width} ${height}`}
+      style={{ width: "100%", height: "auto", aspectRatio: `${width} / ${height}`, display: "block" }}
+    >
       <defs>
         <linearGradient id="arcGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-          <stop offset="0%" stopColor="#7BA7C2" stopOpacity="0.7" />
-          <stop offset="50%" stopColor="#C8A96E" stopOpacity="0.7" />
-          <stop offset="100%" stopColor="#C47A5A" stopOpacity="0.9" />
+          {orderedSections.map((section, index) => (
+            <stop
+              key={section.id}
+              offset={`${orderedSections.length === 1 ? 0 : (index / (orderedSections.length - 1)) * 100}%`}
+              stopColor={section.accent}
+              stopOpacity={index === orderedSections.length - 1 ? 0.92 : 0.72}
+            />
+          ))}
         </linearGradient>
+        <filter id="arcGlow" x="-10%" y="-25%" width="120%" height="150%">
+          <feGaussianBlur stdDeviation="5" result="glow" />
+          <feMerge>
+            <feMergeNode in="glow" />
+            <feMergeNode in="SourceGraphic" />
+          </feMerge>
+        </filter>
       </defs>
-      <path d={path} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="18" strokeLinecap="round" />
-      <path d={path} fill="none" stroke="url(#arcGrad)" strokeWidth="2" strokeLinecap="round" strokeDasharray="4 3" />
-      {pts.map((pt, i) => (
-        <g key={i}>
-          <circle cx={pt.x} cy={pt.y} r={stateCounts[SECTIONS[i]] > 0 ? 10 : 6} fill={sections[i].accent} opacity={stateCounts[SECTIONS[i]] > 0 ? 0.9 : 0.3} />
-          {stateCounts[SECTIONS[i]] > 0 && (
-            <text x={pt.x} y={pt.y + 4} textAnchor="middle" fill="white" fontSize="9" fontWeight="bold" fontFamily="monospace">
-              {stateCounts[SECTIONS[i]]}
+      <path d={path} fill="none" stroke="rgba(255,255,255,0.045)" strokeWidth="34" strokeLinecap="round" />
+      <path d={path} fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="12" strokeLinecap="round" />
+      <path d={path} fill="none" stroke="url(#arcGrad)" strokeWidth="4" strokeLinecap="round" strokeDasharray="10 10" filter="url(#arcGlow)" />
+      {points.map(({ x, y, section }, index) => {
+        const count = stateCounts[section.id];
+        return (
+          <g key={section.id}>
+            <circle cx={x} cy={y} r={count > 0 ? 16 : 10} fill={section.accent} opacity={count > 0 ? 0.94 : 0.36} />
+            <circle cx={x} cy={y} r={count > 0 ? 24 : 18} fill="none" stroke={section.accent} strokeOpacity={count > 0 ? 0.34 : 0.14} />
+            {count > 0 && (
+              <text x={x} y={y + 5} textAnchor="middle" fill="#0d0b09" fontSize="12" fontWeight="bold" fontFamily="monospace">
+                {count}
+              </text>
+            )}
+            <text x={x} y={height - 32} textAnchor="middle" fill={section.accent} fontSize="11" fontFamily="monospace" letterSpacing="3" opacity="0.76">
+              {getPartLabel(index).toUpperCase()}
             </text>
-          )}
-          <text x={pt.x} y={pt.y + 22} textAnchor="middle" fill={sections[i].accent} fontSize="8.5" fontFamily="'Cormorant Garamond', Georgia, serif" letterSpacing="1" opacity="0.8">
-            {sections[i].title.toUpperCase()}
-          </text>
-        </g>
-      ))}
+            <text
+              x={x}
+              y={height - 12}
+              textAnchor="middle"
+              fill={section.accent}
+              fontSize="13"
+              fontFamily="'Cormorant Garamond', Georgia, serif"
+              letterSpacing="1.6"
+              opacity="0.92"
+            >
+              {section.title.toUpperCase()}
+            </text>
+          </g>
+        );
+      })}
     </svg>
   );
 };
 
-const HaikuCard = ({ haiku, sectionAccent, accentDim, accentBorder, status, onToggle, showNote }) => {
+const HaikuCard = ({ haiku, sectionAccent, accentDim, status, onToggle, showNote }) => {
   const [noteOpen, setNoteOpen] = useState(false);
 
   const isSelected = status === "selected";
@@ -111,13 +170,13 @@ const HaikuCard = ({ haiku, sectionAccent, accentDim, accentBorder, status, onTo
     border: isSelected
       ? `1px solid ${sectionAccent}`
       : isRejected
-      ? "1px solid rgba(255,255,255,0.05)"
-      : `1px solid rgba(255,255,255,0.08)`,
+        ? "1px solid rgba(255,255,255,0.05)"
+        : "1px solid rgba(255,255,255,0.08)",
     background: isSelected
       ? accentDim
       : isRejected
-      ? "rgba(0,0,0,0.2)"
-      : "rgba(255,255,255,0.025)",
+        ? "rgba(0,0,0,0.2)"
+        : "rgba(255,255,255,0.025)",
     opacity: isRejected ? 0.38 : 1,
   };
 
@@ -145,19 +204,22 @@ const HaikuCard = ({ haiku, sectionAccent, accentDim, accentBorder, status, onTo
     ...(isSelected
       ? { background: sectionAccent, color: "#0a0907", fontWeight: "bold" }
       : isRejected
-      ? { background: "rgba(255,255,255,0.06)", color: "#555" }
-      : {}),
+        ? { background: "rgba(255,255,255,0.06)", color: "#555" }
+        : {}),
   };
 
   return (
     <div style={cardStyle} onClick={() => onToggle(haiku.id)}>
       {isSelected && <span style={badgeStyle}>SELECTED</span>}
-      {isRejected && <span style={badgeStyle}>✕</span>}
+      {isRejected && <span style={badgeStyle}>X</span>}
       <p style={textStyle}>{haiku.text}</p>
       {showNote && (
         <div
           style={{ marginTop: 8 }}
-          onClick={(e) => { e.stopPropagation(); setNoteOpen(!noteOpen); }}
+          onClick={(e) => {
+            e.stopPropagation();
+            setNoteOpen(!noteOpen);
+          }}
         >
           <span style={{ fontSize: 10, letterSpacing: "0.1em", color: sectionAccent, opacity: 0.7, cursor: "pointer", fontFamily: "monospace" }}>
             {noteOpen ? "▾ NOTE" : "▸ NOTE"}
@@ -175,10 +237,13 @@ const HaikuCard = ({ haiku, sectionAccent, accentDim, accentBorder, status, onTo
 
 export default function StillLifeDashboard() {
   const [haikuStates, setHaikuStates] = useState({});
+  const [sectionOrder, setSectionOrder] = useState(SECTION_IDS);
+  const [draggedSectionId, setDraggedSectionId] = useState(null);
+  const [dropTargetId, setDropTargetId] = useState(null);
   const [sectionNotes, setSectionNotes] = useState({ stasis: "", emergence: "", energy: "" });
   const [formNote, setFormNote] = useState("");
   const [showNotes, setShowNotes] = useState(true);
-  const [view, setView] = useState("columns"); // "columns" | "form"
+  const [view, setView] = useState("columns");
 
   const toggleHaiku = useCallback((id) => {
     setHaikuStates((prev) => ({
@@ -187,17 +252,46 @@ export default function StillLifeDashboard() {
     }));
   }, []);
 
+  const reorderSections = useCallback((draggedId, targetId) => {
+    if (!draggedId || !targetId || draggedId === targetId) {
+      return;
+    }
+
+    setSectionOrder((prev) => {
+      const next = prev.filter((id) => id !== draggedId);
+      const targetIndex = next.indexOf(targetId);
+      next.splice(targetIndex, 0, draggedId);
+      return next;
+    });
+  }, []);
+
+  const handleSectionDrop = useCallback(
+    (targetId) => {
+      reorderSections(draggedSectionId, targetId);
+      setDraggedSectionId(null);
+      setDropTargetId(null);
+    },
+    [draggedSectionId, reorderSections],
+  );
+
   const getStatus = (id) => haikuStates[id] || "neutral";
 
   const selectedBySection = {};
-  SECTIONS.forEach((s) => {
-    selectedBySection[s] = HAIKU_DATA[s].haikus.filter((h) => getStatus(h.id) === "selected");
+  SECTION_IDS.forEach((sectionId) => {
+    selectedBySection[sectionId] = HAIKU_DATA[sectionId].haikus.filter((haiku) => getStatus(haiku.id) === "selected");
   });
 
   const stateCounts = {};
-  SECTIONS.forEach((s) => { stateCounts[s] = selectedBySection[s].length; });
+  SECTION_IDS.forEach((sectionId) => {
+    stateCounts[sectionId] = selectedBySection[sectionId].length;
+  });
 
-  const totalSelected = Object.values(stateCounts).reduce((a, b) => a + b, 0);
+  const totalSelected = Object.values(stateCounts).reduce((sum, count) => sum + count, 0);
+
+  const orderedSections = sectionOrder.map((sectionId, index) => ({
+    ...HAIKU_DATA[sectionId],
+    partLabel: getPartLabel(index),
+  }));
 
   const resetAll = () => setHaikuStates({});
 
@@ -241,6 +335,7 @@ export default function StillLifeDashboard() {
       gap: 24,
       marginTop: 20,
       alignItems: "center",
+      flexWrap: "wrap",
     },
     navBtn: (active) => ({
       fontSize: 10,
@@ -296,7 +391,7 @@ export default function StillLifeDashboard() {
       display: "flex",
       gap: 12,
       flexWrap: "wrap",
-      marginTop: 16,
+      marginTop: 18,
     },
     selectedChip: (accent) => ({
       fontSize: 11.5,
@@ -311,14 +406,15 @@ export default function StillLifeDashboard() {
     }),
     columnsGrid: {
       display: "grid",
-      gridTemplateColumns: "1fr 1fr 1fr",
+      gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
       gap: 20,
       padding: "0 40px",
       marginTop: 4,
     },
-    column: (accent, accentDim) => ({
+    column: {
       position: "relative",
-    }),
+      minWidth: 0,
+    },
     colHeader: {
       padding: "20px 0 16px",
       borderBottom: "1px solid rgba(255,255,255,0.06)",
@@ -354,11 +450,11 @@ export default function StillLifeDashboard() {
       opacity: 0.55,
       lineHeight: 1.5,
     }),
-    notesInput: (accent) => ({
+    notesInput: {
       width: "100%",
       marginTop: 14,
       background: "rgba(255,255,255,0.02)",
-      border: `1px solid rgba(255,255,255,0.06)`,
+      border: "1px solid rgba(255,255,255,0.06)",
       borderRadius: 3,
       padding: "10px 12px",
       color: "#8a8278",
@@ -370,26 +466,47 @@ export default function StillLifeDashboard() {
       outline: "none",
       boxSizing: "border-box",
       lineHeight: 1.6,
-    }),
+    },
     formViewGrid: {
       display: "grid",
-      gridTemplateColumns: "1fr 1fr 1fr",
+      gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
       gap: 20,
       padding: "0 40px",
       marginTop: 4,
     },
-    formSection: (accent, accentDim) => ({
+    formSection: (accent, accentDim, isDragged, isDropTarget) => ({
       padding: "20px",
-      background: accentDim,
-      border: `1px solid ${accent}30`,
+      background: isDragged ? "rgba(255,255,255,0.035)" : accentDim,
+      border: isDropTarget ? `1px solid ${accent}` : `1px solid ${accent}30`,
       borderRadius: 4,
+      boxShadow: isDropTarget ? `0 0 0 1px ${accent}40` : "none",
+      opacity: isDragged ? 0.55 : 1,
+      transform: isDropTarget ? "translateY(-3px)" : "translateY(0)",
+      transition: "transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease, opacity 0.18s ease",
+      minWidth: 0,
     }),
+    formSectionHeader: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: 12,
+      marginBottom: 12,
+      cursor: "grab",
+      userSelect: "none",
+    },
+    dragHint: {
+      fontSize: 9,
+      letterSpacing: "0.18em",
+      fontFamily: "monospace",
+      color: "#5a5248",
+      whiteSpace: "nowrap",
+    },
     formSectionLabel: (accent) => ({
       fontSize: 9,
       letterSpacing: "0.25em",
       fontFamily: "monospace",
       color: accent,
-      marginBottom: 12,
+      margin: 0,
     }),
     formHaikuItem: (accent) => ({
       padding: "12px 14px",
@@ -426,14 +543,13 @@ export default function StillLifeDashboard() {
   };
 
   const hint = (
-    <p style={{ fontSize: 10, fontFamily: "monospace", letterSpacing: "0.1em", color: "#3a3530", marginTop: 10, marginBottom: 0 }}>
-      CLICK CARD → SELECT &nbsp;·&nbsp; CLICK AGAIN → REJECT &nbsp;·&nbsp; CLICK AGAIN → RESET
+    <p style={{ fontSize: 10, fontFamily: "monospace", letterSpacing: "0.1em", color: "#3a3530", marginTop: 10, marginBottom: 0, padding: "0 40px" }}>
+      CLICK CARD {"->"} SELECT · CLICK AGAIN {"->"} REJECT · CLICK AGAIN {"->"} RESET
     </p>
   );
 
   return (
     <div style={styles.root}>
-      {/* HEADER */}
       <div style={styles.header}>
         <p style={styles.eyebrow}>CHAMBER ORCHESTRA · FORM PLANNING</p>
         <h1 style={styles.title}>
@@ -452,16 +568,15 @@ export default function StillLifeDashboard() {
         </div>
       </div>
 
-      {/* ARC PANEL */}
       <div style={styles.formPanel}>
-        <p style={styles.arcLabel}>ENERGY ARC — SELECTED HAIKU PER SECTION</p>
-        <ArcSVG stateCounts={stateCounts} />
+        <p style={styles.arcLabel}>ENERGY ARC — CURRENT SECTION ORDER + SELECTED HAIKU</p>
+        <ArcSVG orderedSections={orderedSections} stateCounts={stateCounts} />
         {totalSelected > 0 && (
           <div style={styles.selectedList}>
-            {SECTIONS.map((s) =>
-              selectedBySection[s].map((h) => (
-                <span key={h.id} style={styles.selectedChip(HAIKU_DATA[s].accent)}>
-                  {h.text.split("\n")[0]}…
+            {orderedSections.map((section) =>
+              selectedBySection[section.id].map((haiku) => (
+                <span key={haiku.id} style={styles.selectedChip(section.accent)}>
+                  {section.partLabel} · {haiku.text.split("\n")[0]}…
                 </span>
               ))
             )}
@@ -474,77 +589,103 @@ export default function StillLifeDashboard() {
         )}
       </div>
 
-      {/* COLUMNS VIEW */}
       {view === "columns" && (
         <>
           <div style={styles.columnsGrid}>
-            {SECTIONS.map((sKey) => {
-              const sec = HAIKU_DATA[sKey];
-              return (
-                <div key={sKey} style={styles.column(sec.accent, sec.accentDim)}>
-                  <div style={styles.colHeader}>
-                    <p style={styles.colLabel(sec.accent)}>{sec.label} &nbsp;·&nbsp; {sec.title.toUpperCase()}</p>
-                    <h2 style={styles.colTitle}>{sec.subtitle}</h2>
-                    <p style={styles.colSubtitle}>&nbsp;</p>
-                    <p style={styles.sonicTag(sec.accent)}>{sec.sonic}</p>
-                  </div>
-                  {sec.haikus.map((h) => (
-                    <HaikuCard
-                      key={h.id}
-                      haiku={h}
-                      sectionAccent={sec.accent}
-                      accentDim={sec.accentDim}
-                      accentBorder={sec.accentBorder}
-                      status={getStatus(h.id)}
-                      onToggle={toggleHaiku}
-                      showNote={showNotes}
-                    />
-                  ))}
-                  {showNotes && (
-                    <textarea
-                      style={styles.notesInput(sec.accent)}
-                      placeholder={`Compositional notes for ${sec.title.toLowerCase()}…`}
-                      value={sectionNotes[sKey]}
-                      onChange={(e) => setSectionNotes((prev) => ({ ...prev, [sKey]: e.target.value }))}
-                    />
-                  )}
+            {orderedSections.map((section) => (
+              <div key={section.id} style={styles.column}>
+                <div style={styles.colHeader}>
+                  <p style={styles.colLabel(section.accent)}>{section.partLabel} &nbsp;·&nbsp; {section.title.toUpperCase()}</p>
+                  <h2 style={styles.colTitle}>{section.subtitle}</h2>
+                  <p style={styles.colSubtitle}>&nbsp;</p>
+                  <p style={styles.sonicTag(section.accent)}>{section.sonic}</p>
                 </div>
-              );
-            })}
+                {section.haikus.map((haiku) => (
+                  <HaikuCard
+                    key={haiku.id}
+                    haiku={haiku}
+                    sectionAccent={section.accent}
+                    accentDim={section.accentDim}
+                    status={getStatus(haiku.id)}
+                    onToggle={toggleHaiku}
+                    showNote={showNotes}
+                  />
+                ))}
+                {showNotes && (
+                  <textarea
+                    style={styles.notesInput}
+                    placeholder={`Compositional notes for ${section.partLabel.toLowerCase()} · ${section.title.toLowerCase()}…`}
+                    value={sectionNotes[section.id]}
+                    onChange={(e) => setSectionNotes((prev) => ({ ...prev, [section.id]: e.target.value }))}
+                  />
+                )}
+              </div>
+            ))}
           </div>
           {hint}
         </>
       )}
 
-      {/* FORM VIEW */}
       {view === "form" && (
         <>
           <div style={styles.formViewGrid}>
-            {SECTIONS.map((sKey) => {
-              const sec = HAIKU_DATA[sKey];
-              const selected = selectedBySection[sKey];
+            {orderedSections.map((section) => {
+              const selected = selectedBySection[section.id];
+              const isDragged = draggedSectionId === section.id;
+              const isDropTarget = dropTargetId === section.id && draggedSectionId !== section.id;
+
               return (
-                <div key={sKey} style={styles.formSection(sec.accent, sec.accentDim)}>
-                  <p style={styles.formSectionLabel(sec.accent)}>
-                    {sec.label} &nbsp;·&nbsp; {sec.title.toUpperCase()} &nbsp;·&nbsp; {selected.length} HAIKU
-                  </p>
+                <div
+                  key={section.id}
+                  style={styles.formSection(section.accent, section.accentDim, isDragged, isDropTarget)}
+                  draggable
+                  onDragStart={() => {
+                    setDraggedSectionId(section.id);
+                    setDropTargetId(section.id);
+                  }}
+                  onDragEnter={() => {
+                    if (draggedSectionId && draggedSectionId !== section.id) {
+                      setDropTargetId(section.id);
+                    }
+                  }}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    if (draggedSectionId && draggedSectionId !== section.id) {
+                      setDropTargetId(section.id);
+                    }
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    handleSectionDrop(section.id);
+                  }}
+                  onDragEnd={() => {
+                    setDraggedSectionId(null);
+                    setDropTargetId(null);
+                  }}
+                >
+                  <div style={styles.formSectionHeader}>
+                    <p style={styles.formSectionLabel(section.accent)}>
+                      {section.partLabel} &nbsp;·&nbsp; {section.title.toUpperCase()} &nbsp;·&nbsp; {selected.length} HAIKU
+                    </p>
+                    <span style={styles.dragHint}>DRAG TO REORDER</span>
+                  </div>
                   {selected.length === 0 ? (
-                    <p style={styles.emptyState(sec.accent)}>NO HAIKU SELECTED</p>
+                    <p style={styles.emptyState(section.accent)}>NO HAIKU SELECTED</p>
                   ) : (
-                    selected.map((h, i) => (
-                      <div key={h.id} style={styles.formHaikuItem(sec.accent)}>
-                        <p style={{ ...styles.formHaikuText, color: sec.accent, fontSize: 9, fontFamily: "monospace", letterSpacing: "0.12em", marginBottom: 4 }}>
-                          {String(i + 1).padStart(2, "0")}
+                    selected.map((haiku, index) => (
+                      <div key={haiku.id} style={styles.formHaikuItem(section.accent)}>
+                        <p style={{ ...styles.formHaikuText, color: section.accent, fontSize: 9, fontFamily: "monospace", letterSpacing: "0.12em", marginBottom: 4 }}>
+                          {String(index + 1).padStart(2, "0")}
                         </p>
-                        <p style={styles.formHaikuText}>{h.text}</p>
+                        <p style={styles.formHaikuText}>{haiku.text}</p>
                       </div>
                     ))
                   )}
-                  {sectionNotes[sKey] && (
+                  {sectionNotes[section.id] && (
                     <div style={{ marginTop: 14, padding: "10px 12px", background: "rgba(0,0,0,0.2)", borderRadius: 3 }}>
-                      <p style={{ fontSize: 9, fontFamily: "monospace", letterSpacing: "0.1em", color: sec.accent, opacity: 0.5, marginBottom: 4 }}>NOTES</p>
+                      <p style={{ fontSize: 9, fontFamily: "monospace", letterSpacing: "0.1em", color: section.accent, opacity: 0.5, marginBottom: 4 }}>NOTES</p>
                       <p style={{ fontSize: 12.5, fontStyle: "italic", color: "#7a7268", fontFamily: "'Cormorant Garamond', Georgia, serif", margin: 0, lineHeight: 1.6 }}>
-                        {sectionNotes[sKey]}
+                        {sectionNotes[section.id]}
                       </p>
                     </div>
                   )}
@@ -552,7 +693,6 @@ export default function StillLifeDashboard() {
               );
             })}
           </div>
-          {/* Global form note */}
           <div style={styles.globalNotesArea}>
             <p style={{ fontSize: 9, fontFamily: "monospace", letterSpacing: "0.2em", color: "#3a3530", marginBottom: 10 }}>GLOBAL FORM NOTES</p>
             <textarea
